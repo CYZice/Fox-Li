@@ -7,15 +7,23 @@ def propagate(u, x):
     dx = x[1] - x[0]
     # 长度都用波长作单位
     k = 2 * np.pi
+    distance = 100
+    radius = distance  # 对称共焦腔
 
-    c = np.sqrt(1j / 100 * np.exp(-1j * k * 100))
+    c = np.sqrt(1j / distance)
 
     for j in range(len(x)):
         for i in range(len(x)):
+            # 两镜面之间的近轴光程
+            rho = (
+                distance
+                + (x[j] - x[i]) ** 2 / (2 * distance)
+                - (x[j] ** 2 + x[i] ** 2) / (2 * radius)
+            )
             u2[j] += (
                 u[i]
                 * c
-                * np.exp(-1j * k * (x[j] - x[i]) ** 2 / (2 * 100))
+                * np.exp(-1j * k * rho)
                 * dx
             )
 

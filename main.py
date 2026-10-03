@@ -30,6 +30,22 @@ def propagate(u, x):
     return u2
 
 
+def propagate2d(u, x):
+    dx = x[1] - x[0]
+    k = 2 * np.pi
+    distance = 100
+    kernel = np.zeros((len(x), len(x)), dtype=complex)
+
+    for j in range(len(x)):
+        for i in range(len(x)):
+            kernel[j, i] = (
+                np.exp(1j * k * x[j] * x[i] / distance)
+                * dx
+            )
+
+    return kernel @ u @ kernel.T
+
+
 x = np.linspace(-10, 10, 101)
 u = np.ones(101, dtype=complex)
 iteration = 1000
@@ -83,4 +99,34 @@ plt.figure()
 plt.plot(range(1, len(gamma_list) + 1), np.angle(gamma_list))
 plt.xlabel("iteration")
 plt.ylabel("arg(gamma)")
+plt.show()
+
+
+x2 = np.linspace(-10, 10, 51)
+u2d = np.ones((51, 51), dtype=complex)
+
+for n in range(300):
+    u2d = propagate2d(u2d, x2)
+    u2d = u2d / np.max(np.abs(u2d))
+
+plt.figure()
+plt.imshow(
+    np.abs(u2d),
+    extent=[-10, 10, -10, 10],
+    origin="lower",
+)
+plt.xlabel("x / lambda")
+plt.ylabel("y / lambda")
+plt.colorbar()
+plt.show()
+
+plt.figure()
+plt.imshow(
+    np.angle(u2d),
+    extent=[-10, 10, -10, 10],
+    origin="lower",
+)
+plt.xlabel("x / lambda")
+plt.ylabel("y / lambda")
+plt.colorbar()
 plt.show()

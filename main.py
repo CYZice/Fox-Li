@@ -30,7 +30,7 @@ def propagate(u, x):
     return u2
 
 
-x = np.linspace(-25, 25, 101)
+x = np.linspace(-10, 10, 101)
 u = np.ones(101, dtype=complex)
 iteration = 300
 
@@ -38,13 +38,20 @@ for n in range(iteration):
     u2 = propagate(u, x)
     u = u2 / np.max(np.abs(u2))
 
-print(iteration, abs(u[75]))
+amplitude = np.abs(u)
+gaussian = np.exp(-x**2 / (100 / np.pi))
+positive = x >= 0
+index = np.argmin(np.abs(amplitude[positive] - 1 / np.e))
+print("数值 1/e 半径:", x[positive][index])
+print("理论 1/e 半径:", np.sqrt(100 / np.pi))
 
 
 plt.figure()
-plt.plot(x, np.abs(u))
+plt.plot(x, amplitude, label="numerical")
+plt.plot(x, gaussian, label="Gaussian")
 plt.xlabel("x / lambda")
 plt.ylabel("|u|")
+plt.legend()
 plt.show()
 
 plt.figure()

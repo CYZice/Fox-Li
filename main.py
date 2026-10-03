@@ -33,9 +33,12 @@ def propagate(u, x):
 x = np.linspace(-10, 10, 101)
 u = np.ones(101, dtype=complex)
 iteration = 300
+gamma_list = []
 
 for n in range(iteration):
     u2 = propagate(u, x)
+    mu = np.mean(u2 / u)
+    gamma_list.append(1 / mu)
     u = u2 / np.max(np.abs(u2))
 
 amplitude = np.abs(u)
@@ -58,4 +61,16 @@ plt.figure()
 plt.plot(x, np.angle(u))
 plt.xlabel("x / lambda")
 plt.ylabel("phase")
+plt.show()
+
+plt.figure()
+plt.plot(range(1, iteration + 1), np.abs(gamma_list))
+plt.xlabel("iteration")
+plt.ylabel("|gamma|")
+plt.show()
+
+plt.figure()
+plt.plot(range(1, iteration + 1), np.angle(gamma_list))
+plt.xlabel("iteration")
+plt.ylabel("arg(gamma)")
 plt.show()

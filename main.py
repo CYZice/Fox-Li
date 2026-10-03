@@ -32,14 +32,24 @@ def propagate(u, x):
 
 x = np.linspace(-10, 10, 101)
 u = np.ones(101, dtype=complex)
-iteration = 300
+iteration = 1000
 gamma_list = []
+stable = 0
 
 for n in range(iteration):
     u2 = propagate(u, x)
     mu = np.mean(u2 / u)
     gamma_list.append(1 / mu)
     u = u2 / np.max(np.abs(u2))
+
+    if n > 0 and abs(gamma_list[-1] - gamma_list[-2]) < 1e-4:
+        stable += 1
+    else:
+        stable = 0
+
+    if stable >= 10:
+        print("收敛迭代次数:", n + 1)
+        break
 
 amplitude = np.abs(u)
 gaussian = np.exp(-x**2 / (100 / np.pi))
@@ -64,13 +74,13 @@ plt.ylabel("phase")
 plt.show()
 
 plt.figure()
-plt.plot(range(1, iteration + 1), np.abs(gamma_list))
+plt.plot(range(1, len(gamma_list) + 1), np.abs(gamma_list))
 plt.xlabel("iteration")
 plt.ylabel("|gamma|")
 plt.show()
 
 plt.figure()
-plt.plot(range(1, iteration + 1), np.angle(gamma_list))
+plt.plot(range(1, len(gamma_list) + 1), np.angle(gamma_list))
 plt.xlabel("iteration")
 plt.ylabel("arg(gamma)")
 plt.show()

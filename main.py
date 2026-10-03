@@ -105,7 +105,7 @@ plt.show()
 x2 = np.linspace(-10, 10, 51)
 u2d = np.ones((51, 51), dtype=complex)
 
-for n in range(300):
+for n in range(len(gamma_list)):
     u2d = propagate2d(u2d, x2)
     u2d = u2d / np.max(np.abs(u2d))
 
@@ -118,6 +118,17 @@ plt.imshow(
 plt.xlabel("x / lambda")
 plt.ylabel("y / lambda")
 plt.colorbar()
+plt.show()
+
+center = len(x2) // 2
+
+plt.figure()
+plt.plot(x2, amplitude[::2], label="1D")
+plt.plot(x2, np.abs(u2d[center]), label="2D center")
+plt.plot(x2, np.exp(-x2**2 / (100 / np.pi)), label="Gaussian")
+plt.xlabel("x / lambda")
+plt.ylabel("|u|")
+plt.legend()
 plt.show()
 
 plt.figure()

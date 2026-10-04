@@ -50,15 +50,18 @@ x = np.linspace(-10, 10, 101)
 u = np.ones(101, dtype=complex)
 iteration = 1000
 gamma_list = []
+error_list = []
 stable = 0
 
 for n in range(iteration):
     u2 = propagate(u, x)
-    mu = np.mean(u2 / u)
+    mu = np.vdot(u, u2) / np.vdot(u, u)
     gamma_list.append(1 / mu)
+    error = np.linalg.norm(u2 - mu * u) / np.linalg.norm(u2)
+    error_list.append(error)
     u = u2 / np.max(np.abs(u2))
 
-    if n > 0 and abs(gamma_list[-1] - gamma_list[-2]) < 1e-4:
+    if error < 1e-4:
         stable += 1
     else:
         stable = 0
@@ -99,6 +102,13 @@ plt.figure()
 plt.plot(range(1, len(gamma_list) + 1), np.angle(gamma_list))
 plt.xlabel("iteration")
 plt.ylabel("arg(gamma)")
+plt.show()
+
+plt.figure()
+plt.plot(range(1, len(error_list) + 1), error_list)
+plt.yscale("log")
+plt.xlabel("iteration")
+plt.ylabel("error")
 plt.show()
 
 

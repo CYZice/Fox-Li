@@ -160,9 +160,10 @@ plt.show()
 theta = 0.005
 k = 2 * np.pi
 u_tilt = np.ones(101, dtype=complex)
+iteration_tilt = 3000
 stable = 0
 
-for n in range(iteration):
+for n in range(iteration_tilt):
     # 从正常镜传播到倾斜镜
     u_tilt2 = propagate(u_tilt, kernel)
 
@@ -189,8 +190,15 @@ for n in range(iteration):
 amplitude_tilt = np.abs(u_tilt)
 intensity_tilt = amplitude_tilt ** 2
 center_tilt = np.sum(x * intensity_tilt) / np.sum(intensity_tilt)
+width_tilt = 2 * np.sqrt(
+    np.sum((x - center_tilt) ** 2 * intensity_tilt) / np.sum(intensity_tilt)
+)
+loss_tilt = 1 - np.abs(mu_tilt) ** 2
 
 print("theta:", theta)
+print("width:", width_tilt)
+print("|mu|:", np.abs(mu_tilt))
+print("round trip loss:", loss_tilt)
 print("倾斜场最后残差:", error)
 print("光束中心:", center_tilt)
 print(

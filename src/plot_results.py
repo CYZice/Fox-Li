@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FixedLocator, MaxNLocator
@@ -8,6 +10,7 @@ RED = "#E64B35"
 GREEN = "#00A087"
 GRAY = "#666666"
 LIGHT_GRAY = "#B8B8B8"
+FIGURE_DIR = Path(__file__).resolve().parent.parent / "figures"
 
 
 def set_plot_style():
@@ -44,6 +47,7 @@ def set_plot_style():
 
 
 def finish_figure(fig, name):
+    FIGURE_DIR.mkdir(exist_ok=True)
     # 减少刻度，保留相位和色条的固定刻度
     for ax in fig.axes:
         if ax.get_label() == "<colorbar>":
@@ -52,8 +56,8 @@ def finish_figure(fig, name):
             ax.xaxis.set_major_locator(MaxNLocator(nbins=5))
         if ax.get_yscale() == "linear" and not isinstance(ax.yaxis.get_major_locator(), FixedLocator):
             ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
-    fig.savefig(name + ".png", dpi=300, bbox_inches="tight")
-    fig.savefig(name + ".pdf", bbox_inches="tight")
+    fig.savefig(FIGURE_DIR / (name + ".png"), dpi=300, bbox_inches="tight")
+    fig.savefig(FIGURE_DIR / (name + ".pdf"), bbox_inches="tight")
 
     if "agg" not in plt.get_backend().lower():
         plt.show()

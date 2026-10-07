@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 from plot_results import (
     set_plot_style,
@@ -21,6 +23,10 @@ from plot_results import (
 # 姓名：陈昀泽
 # 学号：U202413823
 # 班级：光实2401
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = PROJECT_ROOT / "figures" / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 set_plot_style()
 
@@ -265,7 +271,7 @@ scan_data = np.column_stack(
     ]
 )
 np.savetxt(
-    "tilt_scan.csv",
+    DATA_DIR / "tilt_scan.csv",
     scan_data,
     delimiter=",",
     header="theta_rad,y_center_lambda,w_y_lambda,mu_2d_abs,round_trip_loss_2d,iteration,error",
@@ -293,7 +299,7 @@ for theta_scan in theta_change:
     loss_change.append(loss_scan)
 
 np.savetxt(
-    "tilt_change.csv",
+    DATA_DIR / "tilt_change.csv",
     np.column_stack([theta_change, width_change, loss_change]),
     delimiter=",",
     header="theta_rad,w_y_lambda,round_trip_loss_2d",

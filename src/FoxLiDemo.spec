@@ -1,8 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
+from pathlib import Path
 
 
 a = Analysis(
-    ['demo.py'],
+    [str(Path(SPECPATH) / 'demo.py')],
     pathex=[],
     binaries=[],
     datas=[],

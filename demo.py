@@ -1,4 +1,6 @@
+# 陈昀泽 · U202413823 · 光实2401
 import time
+import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -202,14 +204,53 @@ def compute_tilt(theta, reference):
             "error2d": error2d, "iteration2d": iteration2d}
 
 
-def read_theta(text):
-    try:
-        theta = float(text)
-    except ValueError:
-        raise ValueError("请输入数值倾角，范围为 0～0.05 rad。") from None
-    if not np.isfinite(theta) or not 0 <= theta <= 0.05:
-        raise ValueError("倾角必须在 0～0.05 rad 之间。")
-    return theta
+def compute_scan(reference):
+    x = reference["x"]
+    scans = []
+    seconds = []
+    for theta_list in [np.linspace(-0.01, 0.01, 21), np.linspace(0, 0.05, 11)]:
+        start = time.perf_counter()
+        rows = []
+        for theta in theta_list:
+            u, mu, error, iteration = calc_tilt(theta, x, reference["kernel"])
+            intensity = np.abs(u) ** 2
+            center = np.sum(x * intensity) / np.sum(intensity)
+            width = 2 * np.sqrt(np.sum((x - center) ** 2 * intensity) / np.sum(intensity))
+            mu_total = reference["mu_x"] * mu
+            loss = 1 - np.abs(mu_total) ** 2
+            rows.append([theta, center, width, np.abs(mu_total), loss, iteration, error])
+        scans.append(np.array(rows))
+        seconds.append(time.perf_counter() - start)
+    return {"center": scans[0], "change": scans[1], "seconds": seconds}
+
+
+def draw_scan(fig, result):
+    fig.clear()
+    axes = fig.subplots(2, 2)
+    center, change = result["center"], result["change"]
+    axes[0, 0].plot(center[:, 0], -100 * center[:, 0], "--", color=RED,
+                    label=r"理论值 $-L\theta$")
+    axes[0, 0].plot(center[:, 0], center[:, 1], "o", color=BLUE,
+                    markersize=4, markerfacecolor="white", label="数值解")
+    axes[0, 0].set(title="光束中心", xlabel=r"镜面倾角 $\theta$ (rad)",
+                   ylabel=r"$y_c/\lambda$")
+    axes[0, 0].legend()
+    axes[0, 1].plot(change[:, 0], change[:, 2], "o-", color=BLUE, markersize=4)
+    axes[0, 1].set(title="模半径", xlabel=r"镜面倾角 $\theta$ (rad)",
+                   ylabel=r"$w_y/\lambda$")
+    axes[1, 0].plot(change[:, 0], change[:, 4] * 100, "o-", color=BLUE, markersize=4)
+    axes[1, 0].set(title="往返衍射损耗", xlabel=r"镜面倾角 $\theta$ (rad)", ylabel="损耗 (%)")
+    for ax in [axes[0, 0], axes[0, 1], axes[1, 0]]:
+        ax.xaxis.set_major_locator(MaxNLocator(nbins=5))
+    slope = np.polyfit(center[:, 0], center[:, 1], 1)[0]
+    error = np.max(np.abs(center[:, 1] + 100 * center[:, 0]))
+    axes[1, 1].set_axis_off()
+    axes[1, 1].text(0.05, 0.9,
+        f"扫描结果\n\n中心拟合斜率：{slope:.6f} λ/rad\n"
+        f"理论斜率：−100 λ/rad\n最大中心偏差：{error:.3e} λ\n\n"
+        f"θ = 0 rad\n模半径：{change[0, 2]:.6f} λ    损耗：{change[0, 4]*100:.6f}%\n\n"
+        f"θ = 0.05 rad\n模半径：{change[-1, 2]:.6f} λ    损耗：{change[-1, 4]*100:.6f}%",
+        transform=axes[1, 1].transAxes, va="top", fontsize=10)
 
 
 def draw_field(fig, ax, x, field, phase=False):
@@ -301,6 +342,11 @@ class Demo:
         self.tilt_reference = None
         self.tilt = None
         self.buttons = []
+        self.busy = False
+        self.pending_tilt = None
+        self.scan = None
+        self.scan_after = None
+        root.protocol("WM_DELETE_WINDOW", self.close)
         root.title("Fox-Li 光学谐振腔仿真")
         width = min(1200, root.winfo_screenwidth() - 60)
         height = min(800, root.winfo_screenheight() - 90)
@@ -309,6 +355,7 @@ class Demo:
         header.pack(fill="x")
         ttk.Label(header, text="Fox-Li 光学谐振腔仿真",
                   font=("Microsoft YaHei", 16)).pack(side="left")
+        ttk.Label(header, text="陈昀泽 · U202413823 · 光实2401").pack(side="left", padx=16)
         self.status = tk.StringVar(value="就绪")
         ttk.Label(header, textvariable=self.status).pack(side="right", padx=10)
         self.quick_button = self.add_button(header, "快速演示", self.quick_demo)
@@ -341,9 +388,8 @@ class Demo:
         controls.pack(side="left", fill="y")
         controls.pack_propagate(False)
         ttk.Label(controls, text="镜面倾角 θ (rad)", font=("Microsoft YaHei", 11)).pack(anchor="w", pady=(0, 8))
-        self.theta_text = tk.StringVar(value="0.025")
-        self.theta_entry = ttk.Entry(controls, textvariable=self.theta_text)
-        self.theta_entry.pack(fill="x")
+        self.theta_text = tk.StringVar(value="θ = 0.02500 rad")
+        ttk.Label(controls, textvariable=self.theta_text).pack(anchor="w")
         self.theta_scale_value = tk.DoubleVar(value=0.025)
         self.theta_scale = ttk.Scale(controls, from_=0, to=0.05,
                                      variable=self.theta_scale_value, command=self.on_scale)
@@ -352,16 +398,22 @@ class Demo:
         shortcuts.pack(fill="x", pady=(0, 10))
         for value in [0, 0.005, 0.025, 0.05]:
             button = self.add_button(shortcuts, str(value),
-                                     lambda value=value: self.set_theta(value))
+                                     lambda value=value: self.choose_theta(value))
             button.configure(width=5)
             button.pack(side="left", expand=True)
-        self.add_button(controls, "运行倾斜仿真", self.run_tilt).pack(fill="x", pady=(0, 12))
         self.tilt_info = tk.StringVar(value="")
         ttk.Label(controls, textvariable=self.tilt_info, wraplength=225,
                   justify="left").pack(anchor="w", fill="x")
         plots = ttk.Frame(self.tilt_page)
         plots.pack(side="left", fill="both", expand=True)
         self.tilt_fig, self.tilt_canvas = self.make_canvas(plots)
+        self.scan_page = ttk.Frame(self.tabs)
+        self.tabs.add(self.scan_page, text="参数扫描")
+        bar = ttk.Frame(self.scan_page, padding=8)
+        bar.pack(fill="x")
+        self.scan_button = self.add_button(bar, "运行参数扫描", self.run_scan)
+        self.scan_button.pack(side="left")
+        self.scan_fig, self.scan_canvas = self.make_canvas(self.scan_page)
 
     def add_button(self, parent, text, command):
         button = ttk.Button(parent, text=text, command=command)
@@ -375,9 +427,11 @@ class Demo:
         return fig, canvas
 
     def set_busy(self, busy):
+        self.busy = busy
+        if busy:
+            self.cancel_tilt()
         for button in self.buttons:
             button.configure(state="disabled" if busy else "normal")
-        self.theta_entry.configure(state="disabled" if busy else "normal")
         self.theta_scale.configure(state="disabled" if busy else "normal")
         if busy:
             self.status.set("计算中…")
@@ -425,12 +479,71 @@ class Demo:
             self.show_convergence()
             self.status.set("完成")
 
+    def cancel_tilt(self):
+        if self.pending_tilt is not None:
+            self.root.after_cancel(self.pending_tilt)
+            self.pending_tilt = None
+
     def set_theta(self, theta):
-        self.theta_text.set(f"{theta:.3f}")
+        self.cancel_tilt()
         self.theta_scale_value.set(theta)
+        self.theta_text.set(f"θ = {theta:.5f} rad")
+
+    def choose_theta(self, theta):
+        self.set_theta(theta)
+        self.run_tilt()
 
     def on_scale(self, value):
-        self.theta_text.set(f"{float(value):.5f}")
+        self.theta_text.set(f"θ = {float(value):.5f} rad")
+        self.cancel_tilt()
+        if not self.busy:
+            self.pending_tilt = self.root.after(200, self.run_tilt)
+
+    def run_scan(self):
+        self.set_busy(True)
+        self.scan_start = time.perf_counter()
+        # 后台只算 NumPy；主线程定时读取结果并绘图
+        self.scan_result = None
+        self.scan_error = None
+        self.scan_done = threading.Event()
+        threading.Thread(target=self.scan_worker, daemon=True).start()
+        self.scan_after = self.root.after(50, self.check_scan)
+
+    def scan_worker(self):
+        try:
+            reference = self.tilt_reference
+            if reference is None:
+                reference = make_tilt_reference()
+            self.scan_result = compute_scan(reference)
+        except Exception as error:
+            self.scan_error = error
+        finally:
+            self.scan_done.set()
+
+    def check_scan(self):
+        self.scan_after = None
+        if not self.scan_done.is_set():
+            self.scan_after = self.root.after(50, self.check_scan)
+            return
+        try:
+            if self.scan_error is not None:
+                raise self.scan_error
+            self.scan = self.scan_result
+            draw_scan(self.scan_fig, self.scan)
+            self.scan_canvas.draw()
+            self.scan_seconds = time.perf_counter() - self.scan_start
+            self.status.set(f"参数扫描完成 · {self.scan_seconds:.2f} 秒")
+        except Exception as error:
+            self.status.set("计算失败")
+            messagebox.showerror("计算失败", str(error), parent=self.root)
+        finally:
+            self.set_busy(False)
+
+    def close(self):
+        self.cancel_tilt()
+        if self.scan_after is not None:
+            self.root.after_cancel(self.scan_after)
+        self.root.destroy()
 
     def show_tilt(self):
         result = self.tilt
@@ -455,12 +568,8 @@ class Demo:
         self.tilt_canvas.draw()
 
     def run_tilt(self):
-        try:
-            theta = read_theta(self.theta_text.get())
-        except ValueError as error:
-            messagebox.showerror("倾角输入错误", str(error), parent=self.root)
-            return
-        self.theta_scale_value.set(theta)
+        self.cancel_tilt()
+        theta = self.theta_scale_value.get()
         self.set_busy(True)
         start = time.perf_counter()
         try:

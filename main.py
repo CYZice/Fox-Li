@@ -18,9 +18,9 @@ from plot_results import (
     plot_report_tilt,
 )
 
-# 姓名：
-# 学号：
-# 班级：
+# 姓名：陈昀泽
+# 学号：U202413823
+# 班级：光实2401
 
 set_plot_style()
 

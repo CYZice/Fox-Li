@@ -2,8 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def propagate(u, x):
-    u2 = np.zeros(len(x), dtype=complex)
+def make_kernel(x):
     dx = x[1] - x[0]
     # 长度都用波长作单位
     k = 2 * np.pi
@@ -11,6 +10,7 @@ def propagate(u, x):
     radius = distance  # 对称共焦腔
 
     c = np.sqrt(1j / distance)
+    kernel = np.zeros((len(x), len(x)), dtype=complex)
 
     for j in range(len(x)):
         for i in range(len(x)):
@@ -20,12 +20,13 @@ def propagate(u, x):
                 + (x[j] - x[i]) ** 2 / (2 * distance)
                 - (x[j] ** 2 + x[i] ** 2) / (2 * radius)
             )
-            u2[j] += (
-                u[i]
-                * c
-                * np.exp(-1j * k * rho)
-                * dx
-            )
+            kernel[j, i] = c * np.exp(-1j * k * rho) * dx
+
+    return kernel
+
+
+def propagate(u, kernel):
+    u2 = kernel @ u
 
     return u2
 
@@ -47,6 +48,7 @@ def propagate2d(u, x):
 
 
 x = np.linspace(-10, 10, 101)
+kernel = make_kernel(x)
 u = np.ones(101, dtype=complex)
 iteration = 1000
 gamma_list = []
@@ -54,7 +56,7 @@ error_list = []
 stable = 0
 
 for n in range(iteration):
-    u2 = propagate(u, x)
+    u2 = propagate(u, kernel)
     mu = np.vdot(u, u2) / np.vdot(u, u)
     gamma_list.append(1 / mu)
     error = np.linalg.norm(u2 - mu * u) / np.linalg.norm(u2)
@@ -162,14 +164,14 @@ stable = 0
 
 for n in range(iteration):
     # 从正常镜传播到倾斜镜
-    u_tilt2 = propagate(u_tilt, x)
+    u_tilt2 = propagate(u_tilt, kernel)
 
     # 倾斜镜反射后产生线性相位
     phase = np.exp(1j * 2 * k * theta * x)
     u_tilt2 = u_tilt2 * phase
 
     # 再传播回正常镜
-    u_tilt2 = propagate(u_tilt2, x)
+    u_tilt2 = propagate(u_tilt2, kernel)
 
     mu_tilt = np.vdot(u_tilt, u_tilt2) / np.vdot(u_tilt, u_tilt)
     error = np.linalg.norm(u_tilt2 - mu_tilt * u_tilt) / np.linalg.norm(u_tilt2)

@@ -130,6 +130,7 @@ plt.ylabel("y / lambda")
 plt.colorbar()
 plt.show()
 
+
 center = len(x2) // 2
 
 plt.figure()
@@ -150,4 +151,49 @@ plt.imshow(
 plt.xlabel("x / lambda")
 plt.ylabel("y / lambda")
 plt.colorbar()
+plt.show()
+
+
+# 镜面倾斜：先用 theta=0 检查往返传播
+theta = 0
+k = 2 * np.pi
+u_tilt = np.ones(101, dtype=complex)
+stable = 0
+
+for n in range(iteration):
+    # 从正常镜传播到倾斜镜
+    u_tilt2 = propagate(u_tilt, x)
+
+    # 倾斜镜反射后产生线性相位
+    phase = np.exp(1j * 2 * k * theta * x)
+    u_tilt2 = u_tilt2 * phase
+
+    # 再传播回正常镜
+    u_tilt2 = propagate(u_tilt2, x)
+
+    mu_tilt = np.vdot(u_tilt, u_tilt2) / np.vdot(u_tilt, u_tilt)
+    error = np.linalg.norm(u_tilt2 - mu_tilt * u_tilt) / np.linalg.norm(u_tilt2)
+    u_tilt = u_tilt2 / np.max(np.abs(u_tilt2))
+
+    if error < 1e-4:
+        stable += 1
+    else:
+        stable = 0
+
+    if stable >= 10:
+        print("倾斜腔收敛迭代次数:", n + 1)
+        break
+
+amplitude_tilt = np.abs(u_tilt)
+print(
+    "theta=0 与基础场 RMS 差:",
+    np.sqrt(np.mean((amplitude_tilt - amplitude) ** 2)),
+)
+
+plt.figure()
+plt.plot(x, amplitude, label="basic")
+plt.plot(x, amplitude_tilt, label="round trip")
+plt.xlabel("x / lambda")
+plt.ylabel("|u|")
+plt.legend()
 plt.show()

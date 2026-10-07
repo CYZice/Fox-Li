@@ -154,8 +154,8 @@ plt.colorbar()
 plt.show()
 
 
-# 镜面倾斜：先用 theta=0 检查往返传播
-theta = 0
+# 镜面倾斜：先测试一个小角度
+theta = 0.005
 k = 2 * np.pi
 u_tilt = np.ones(101, dtype=complex)
 stable = 0
@@ -185,8 +185,14 @@ for n in range(iteration):
         break
 
 amplitude_tilt = np.abs(u_tilt)
+intensity_tilt = amplitude_tilt ** 2
+center_tilt = np.sum(x * intensity_tilt) / np.sum(intensity_tilt)
+
+print("theta:", theta)
+print("倾斜场最后残差:", error)
+print("光束中心:", center_tilt)
 print(
-    "theta=0 与基础场 RMS 差:",
+    "倾斜场与基础场 RMS 差:",
     np.sqrt(np.mean((amplitude_tilt - amplitude) ** 2)),
 )
 
@@ -196,4 +202,10 @@ plt.plot(x, amplitude_tilt, label="round trip")
 plt.xlabel("x / lambda")
 plt.ylabel("|u|")
 plt.legend()
+plt.show()
+
+plt.figure()
+plt.plot(x, np.angle(u_tilt))
+plt.xlabel("x / lambda")
+plt.ylabel("phase")
 plt.show()

@@ -201,7 +201,7 @@ def plot_report_base(x, u, gaussian, x2, amplitude_2d):
         [-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi],
         [r"$-\pi$", r"$-\pi/2$", "0", r"$\pi/2$", r"$\pi$"],
     )
-    plot_base_compare(x2, amplitude[::2], amplitude_2d, gaussian[::2], ax=axes[2])
+    plot_base_compare(x2, amplitude, amplitude_2d, gaussian, ax=axes[2])
     axes[0].set_title("(a) 1D amplitude", loc="left")
     axes[1].set_title("(b) Relative phase", loc="left")
     axes[2].set_title("(c) 1D/2D comparison", loc="left")
@@ -236,13 +236,14 @@ def plot_report_base_2d(x, u2d):
             # 只显示振幅不低于峰值 10% 的真实相位
             amplitude = np.abs(u2d)
             data = np.ma.masked_where(
-                amplitude < 0.1 * np.max(amplitude), np.angle(u2d)
+                amplitude < 0.1 * np.max(amplitude),
+                np.angle(u2d * np.exp(-1j * np.angle(u2d.flat[np.argmax(amplitude)])))
             )
             cmap = plt.get_cmap("twilight").copy()
             cmap.set_bad("white")
             low, high = -np.pi, np.pi
             ticks = phase_ticks
-            label = r"$\arg U(x,y)$ (rad)"
+            label = "Relative phase (rad)"
             title = "(b) Phase"
 
         image = ax.imshow(

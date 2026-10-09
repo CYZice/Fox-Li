@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 
 from plot_results import (
@@ -36,21 +38,24 @@ def propagate(u, kernel):
     return u2
 
 
-def make_kernel2d(x):
-    dx = x[1] - x[0]
-    k = 2 * np.pi
-    distance = 100
-    kernel = np.zeros((len(x), len(x)), dtype=complex)
-
-    for j in range(len(x)):
-        for i in range(len(x)):
-            kernel[j, i] = np.exp(1j * k * x[j] * x[i] / distance) * dx
-
-    return kernel
-
-
 def propagate2d(u, kernel):
     return kernel @ u @ kernel.T
+
+
+def calc_stats(x, u, kernel, phase=1):
+    # 最终场的完整往返比例、残差和功率损耗
+    u2 = propagate2d(propagate2d(u, kernel) * phase, kernel)
+    mu = np.vdot(u, u2) / np.vdot(u, u)
+    residual = np.linalg.norm(u2 - mu * u) / np.linalg.norm(u2)
+    intensity = np.abs(u) ** 2
+    weight = np.sum(intensity)
+    xc = np.sum(x[None, :] * intensity) / weight
+    yc = np.sum(x[:, None] * intensity) / weight
+    wx = 2 * np.sqrt(np.sum((x[None, :] - xc) ** 2 * intensity) / weight)
+    wy = 2 * np.sqrt(np.sum((x[:, None] - yc) ** 2 * intensity) / weight)
+    return {"mu": mu, "residual": residual, "loss": 1 - abs(mu) ** 2,
+            "power_loss": 1 - np.vdot(u2, u2).real / np.vdot(u, u).real,
+            "xc": xc, "yc": yc, "wx": wx, "wy": wy}
 
 
 # 基础任务：不加扰动，计算一维、二维自再现模式并输出报告图
@@ -81,25 +86,48 @@ def run_base():
             break
 
     amplitude = np.abs(u)
-    print("基础gamma:", np.abs(gamma_list[-1]))
-    print("基础 arg(gamma) (rad):", np.angle(gamma_list[-1]))
-    print("基础单程mu:", np.abs(1 / gamma_list[-1]))
-    print("基础单程功率损耗:", 1 - np.abs(1 / gamma_list[-1]) ** 2)
+    field1 = propagate(u, kernel)
+    mu1 = np.vdot(u, field1) / np.vdot(u, u)
+    residual1 = np.linalg.norm(field1 - mu1 * u) / np.linalg.norm(field1)
+    print("基础gamma:", np.abs(1 / mu1))
+    print("基础 arg(gamma) (rad):", np.angle(1 / mu1))
+    print("基础单程mu:", np.abs(mu1))
+    print("基础单程功率损耗:", 1 - np.abs(mu1) ** 2)
     gaussian = np.exp(-(x**2) / (100 / np.pi))
     positive = x >= 0
     index = np.argmin(np.abs(amplitude[positive] - 1 / np.e))
     print("数值 1/e 半径:", x[positive][index])
     print("理论 1/e 半径:", np.sqrt(100 / np.pi))
 
-    x2 = np.linspace(-10, 10, 51)
-    kernel2d = make_kernel2d(x2)
-    u2d = np.ones((51, 51), dtype=complex)
+    x2 = np.linspace(-10, 10, 101)
+    kernel2d = make_kernel(x2)
+    u2d = np.ones((len(x2), len(x2)), dtype=complex)
+    errors2d = []
+    stable2d = 0
 
-    for n in range(len(gamma_list)):
-        u2d = propagate2d(u2d, kernel2d)
-        u2d = u2d / np.max(np.abs(u2d))
+    for n in range(iteration):
+        field2 = propagate2d(u2d, kernel2d)
+        mu2d = np.vdot(u2d, field2) / np.vdot(u2d, u2d)
+        error2d = np.linalg.norm(field2 - mu2d * u2d) / np.linalg.norm(field2)
+        errors2d.append(error2d)
+        u2d = field2 / np.max(np.abs(field2))
+        stable2d = stable2d + 1 if error2d < 1e-4 else 0
+        if stable2d >= 10:
+            break
+
+    stats = calc_stats(x2, u2d, kernel2d)
+    assert stable >= 10 and stable2d >= 10 and stats["residual"] < 1e-4
+    print("基础二维迭代次数、往返残差、往返损耗:", len(errors2d), stats["residual"], stats["loss"])
+    data = Path(__file__).resolve().parent.parent / "figures" / "data"
+    data.mkdir(exist_ok=True)
+    np.savez_compressed(data / "base_1d.npz", x=x, field=u, gaussian=gaussian,
+                        gamma_history=gamma_list, residual_history=error_list,
+                        mu_single=mu1, residual_single=residual1, converged=stable >= 10)
+    np.savez_compressed(data / "base_2d.npz", x=x2, field=u2d,
+                        residual_history=errors2d, converged=True, **stats)
 
     center = len(x2) // 2
+    print("一维/二维中心截线 RMS:", np.sqrt(np.mean((np.abs(u) - np.abs(u2d[center])) ** 2)))
 
     plot_report_base(x, u, gaussian, x2, np.abs(u2d[center]))
     plot_report_convergence(gamma_list, error_list)

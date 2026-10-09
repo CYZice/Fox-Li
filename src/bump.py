@@ -5,6 +5,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from base import make_kernel, propagate2d, calc_stats
+
 from plot_results import (
     set_plot_style, finish_figure, BLUE, RED, GREEN, GRAY,
     plot_bump_fields,
@@ -14,21 +16,6 @@ from plot_results import (
 ROOT = Path(__file__).resolve().parent.parent
 FIGURES = ROOT / "figures"
 DATA = FIGURES / "data"
-
-
-def make_kernel(x):
-    # 直接使用共焦腔单程传播核，并保留幅度系数
-    dx = x[1] - x[0]
-    k = 2 * np.pi
-    distance = 100
-    a = x[:, None]
-    b = x[None, :]
-    rho = distance - a * b / distance
-    return np.sqrt(1j / distance) * np.exp(-1j * k * rho) * dx
-
-
-def propagate2d(u, kernel):
-    return kernel @ u @ kernel.T
 
 
 def make_bump(x, x0, y0, radius):
@@ -65,28 +52,17 @@ def calc_bump(x, kernel, x0=0, y0=0, radius=2, iteration=6000, field0=None):
 
     # 对最终保存的场重新计算，不把上一轮的本征值配给新场
     u2 = propagate2d(propagate2d(u, kernel) * phase, kernel)
-    mu = np.vdot(u, u2) / np.vdot(u, u)
-    residual = np.linalg.norm(u2 - mu * u) / np.linalg.norm(u2)
-    power_loss = 1 - np.vdot(u2, u2).real / np.vdot(u, u).real
+    stats = calc_stats(x, u, kernel, phase)
     # 两次往返的残差仅用于诊断，不替代单次往返收敛判据
     u4 = propagate2d(propagate2d(u2, kernel) * phase, kernel)
     mu2 = np.vdot(u, u4) / np.vdot(u, u)
     residual2 = np.linalg.norm(u4 - mu2 * u) / np.linalg.norm(u4)
 
-    intensity = np.abs(u) ** 2
-    weight = np.sum(intensity)
-    xc = np.sum(x[None, :] * intensity) / weight
-    yc = np.sum(x[:, None] * intensity) / weight
-    wx = 2 * np.sqrt(np.sum((x[None, :] - xc) ** 2 * intensity) / weight)
-    wy = 2 * np.sqrt(np.sum((x[:, None] - yc) ** 2 * intensity) / weight)
-
     return {
-        "field": u, "height": h, "mu": mu,
-        "loss": 1 - abs(mu) ** 2, "errors": np.array(errors),
-        "mu_list": np.array(mu_list), "residual": residual,
-        "two_round_residual": residual2, "power_loss": power_loss,
-        "converged": stable >= 10 and residual < 1e-4, "iteration": len(errors),
-        "xc": xc, "yc": yc, "wx": wx, "wy": wy,
+        "field": u, "height": h, "errors": np.array(errors),
+        "mu_list": np.array(mu_list), "two_round_residual": residual2,
+        "converged": stable >= 10 and stats["residual"] < 1e-4,
+        "iteration": len(errors), **stats,
     }
 
 

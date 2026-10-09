@@ -2,7 +2,7 @@ from pathlib import Path
 
 import numpy as np
 
-from base import make_kernel, make_kernel2d, propagate, propagate2d
+from base import make_kernel, propagate, propagate2d, calc_stats
 from plot_results import plot_report_tilt, plot_tilt_2d
 
 
@@ -15,13 +15,13 @@ def calc_tilt(theta, x, kernel, iteration=3000):
     k = 2 * np.pi
     u = np.ones(len(x), dtype=complex)
     stable = 0
+    phase = np.exp(1j * 2 * k * theta * x)
 
     for n in range(iteration):
         # 从正常镜传播到倾斜镜
         u2 = propagate(u, kernel)
 
         # 倾斜镜反射后产生线性相位
-        phase = np.exp(1j * 2 * k * theta * x)
         u2 = u2 * phase
 
         # 再传播回正常镜
@@ -31,7 +31,8 @@ def calc_tilt(theta, x, kernel, iteration=3000):
         error = np.linalg.norm(u2 - mu * u) / np.linalg.norm(u2)
         u = u2 / np.max(np.abs(u2))
 
-        if error < 1e-4:
+        # 两方向合成后仍需满足二维 1e-4 残差
+        if error < 1e-4 / np.sqrt(2):
             stable += 1
         else:
             stable = 0
@@ -39,7 +40,10 @@ def calc_tilt(theta, x, kernel, iteration=3000):
         if stable >= 10:
             break
 
-    return u, mu, error, n + 1
+    u2 = propagate(propagate(u, kernel) * phase, kernel)
+    mu = np.vdot(u, u2) / np.vdot(u, u)
+    error = np.linalg.norm(u2 - mu * u) / np.linalg.norm(u2)
+    return u, mu, error, n + 1, stable >= 10
 
 
 def calc_tilt2d(theta, x, kernel, iteration=3000):
@@ -47,6 +51,8 @@ def calc_tilt2d(theta, x, kernel, iteration=3000):
     u = np.ones((len(x), len(x)), dtype=complex)
     phase = np.exp(1j * 2 * k * theta * x)[:, None]
     stable = 0
+    errors = []
+    mu_list = []
 
     for n in range(iteration):
         u2 = propagate2d(u, kernel)
@@ -55,6 +61,8 @@ def calc_tilt2d(theta, x, kernel, iteration=3000):
 
         mu = np.vdot(u, u2) / np.vdot(u, u)
         error = np.linalg.norm(u2 - mu * u) / np.linalg.norm(u2)
+        errors.append(error)
+        mu_list.append(mu)
         u = u2 / np.max(np.abs(u2))
 
         if error < 1e-4:
@@ -65,7 +73,11 @@ def calc_tilt2d(theta, x, kernel, iteration=3000):
         if stable >= 10:
             break
 
-    return u, error, n + 1
+    stats = calc_stats(x, u, kernel, phase)
+    return {"field": u, "iteration": n + 1,
+            "converged": stable >= 10 and stats["residual"] < 1e-4,
+            "residual_history": np.array(errors),
+            "mu_history": np.array(mu_list), **stats}
 
 
 # 进阶任务：单镜倾斜，扫描倾角并输出报告图
@@ -76,8 +88,9 @@ def run_tilt():
     # 镜面倾斜：一维里的 x 在这里对应物理上的 y 方向
     theta = 0.005
     # x 方向不受倾斜，二维往返本征值由两个方向相乘
-    u_zero, mu_x, _, _ = calc_tilt(0, x, kernel)
-    u_tilt, mu_tilt, error, tilt_iteration = calc_tilt(theta, x, kernel)
+    u_zero, mu_x, _, _, zero_converged = calc_tilt(0, x, kernel)
+    u_tilt, mu_tilt, error, tilt_iteration, converged = calc_tilt(theta, x, kernel)
+    assert zero_converged and converged
     print("倾斜腔收敛迭代次数:", tilt_iteration)
 
     amplitude_tilt = np.abs(u_tilt)
@@ -87,14 +100,17 @@ def run_tilt():
     width_tilt = 2 * np.sqrt(
         np.sum((x - center_tilt) ** 2 * intensity_tilt) / np.sum(intensity_tilt)
     )
-    mu_total = mu_x * mu_tilt
-    loss_tilt = 1 - np.abs(mu_total) ** 2
+    stats = calc_stats(x, np.outer(u_tilt, u_zero), kernel,
+                       np.exp(1j * 4 * np.pi * theta * x)[:, None])
+    assert stats["residual"] < 1e-4
+    mu_total = stats["mu"]
+    loss_tilt = stats["loss"]
 
     print("theta:", theta)
     print("width:", width_tilt)
     print("|mu_2D|:", np.abs(mu_total))
     print("2D round trip loss:", loss_tilt)
-    print("倾斜场最后残差:", error)
+    print("倾斜场二维最终残差:", stats["residual"])
     print("光束中心:", center_tilt)
     print(
         "倾斜场与基础场 RMS 差:",
@@ -111,22 +127,25 @@ def run_tilt():
     scan_error_list = []
 
     for theta_scan in theta_list:
-        u_scan, mu_scan, error_scan, n_scan = calc_tilt(theta_scan, x, kernel)
+        u_scan, mu_scan, error_scan, n_scan, converged = calc_tilt(theta_scan, x, kernel)
+        stats = calc_stats(x, np.outer(u_scan, u_zero), kernel,
+                           np.exp(1j * 4 * np.pi * theta_scan * x)[:, None])
+        assert converged and stats["residual"] < 1e-4
 
         intensity_scan = np.abs(u_scan) ** 2
         center_scan = np.sum(x * intensity_scan) / np.sum(intensity_scan)
         width_scan = 2 * np.sqrt(
             np.sum((x - center_scan) ** 2 * intensity_scan) / np.sum(intensity_scan)
         )
-        mu_total_scan = mu_x * mu_scan
-        loss_scan = 1 - np.abs(mu_total_scan) ** 2
+        mu_total_scan = stats["mu"]
+        loss_scan = stats["loss"]
 
         center_list.append(center_scan)
         width_list.append(width_scan)
         loss_list.append(loss_scan)
         mu_list.append(np.abs(mu_total_scan))
         iteration_list.append(n_scan)
-        scan_error_list.append(error_scan)
+        scan_error_list.append(stats["residual"])
 
         print(theta_scan, n_scan, center_scan, width_scan, loss_scan)
 
@@ -150,7 +169,7 @@ def run_tilt():
         DATA_DIR / "tilt_scan.csv",
         scan_data,
         delimiter=",",
-        header="theta_rad,y_center_lambda,w_y_lambda,mu_2d_abs,round_trip_loss_2d,iteration,error",
+        header="theta_rad,y_center_lambda,w_y_lambda,mu_2d_abs,round_trip_loss_2d,iteration,residual_2d",
         comments="",
     )
 
@@ -158,19 +177,26 @@ def run_tilt():
     theta_change = np.linspace(0, 0.05, 11)
     width_change = []
     loss_change = []
+    change_rows = []
 
     for theta_scan in theta_change:
-        u_scan, mu_scan, error_scan, n_scan = calc_tilt(theta_scan, x, kernel)
+        u_scan, mu_scan, error_scan, n_scan, converged = calc_tilt(theta_scan, x, kernel)
+        stats = calc_stats(x, np.outer(u_scan, u_zero), kernel,
+                           np.exp(1j * 4 * np.pi * theta_scan * x)[:, None])
+        assert converged and stats["residual"] < 1e-4
         intensity_scan = np.abs(u_scan) ** 2
         center_scan = np.sum(x * intensity_scan) / np.sum(intensity_scan)
         width_scan = 2 * np.sqrt(
             np.sum((x - center_scan) ** 2 * intensity_scan) / np.sum(intensity_scan)
         )
-        mu_total_scan = mu_x * mu_scan
-        loss_scan = 1 - np.abs(mu_total_scan) ** 2
+        mu_total_scan = stats["mu"]
+        loss_scan = stats["loss"]
 
         width_change.append(width_scan)
         loss_change.append(loss_scan)
+        change_rows.append([theta_scan, width_scan, loss_scan, center_scan,
+                            stats["wx"], abs(stats["mu"]), stats["residual"],
+                            n_scan, int(converged)])
         if theta_scan in (0, 0.025, 0.05):
             print(
                 "代表倾角:",
@@ -183,21 +209,27 @@ def run_tilt():
 
     np.savetxt(
         DATA_DIR / "tilt_change.csv",
-        np.column_stack([theta_change, width_change, loss_change]),
+        change_rows,
         delimiter=",",
-        header="theta_rad,w_y_lambda,round_trip_loss_2d",
+        header="theta_rad,w_y_lambda,round_trip_loss_2d,y_center_lambda,w_x_lambda,mu_2d_abs,residual_2d,iteration_1d,converged",
         comments="",
     )
 
     # 二维结果只选几个代表角度
-    x2 = np.linspace(-10, 10, 51)
-    kernel2d = make_kernel2d(x2)
+    x2 = np.linspace(-10, 10, 101)
+    kernel2d = make_kernel(x2)
     theta_show = [0, 0.025, 0.05]
     tilt_fields = []
 
-    for theta2d in theta_show:
-        u_tilt2d, error2d, n2d = calc_tilt2d(theta2d, x2, kernel2d)
-        tilt_fields.append(u_tilt2d)
+    for theta2d in [0, 0.005, 0.025, 0.05]:
+        result = calc_tilt2d(theta2d, x2, kernel2d)
+        assert result["converged"]
+        np.savez_compressed(DATA_DIR / f"tilt_2d_{theta2d:.3f}.npz",
+                            x=x2, theta=theta2d, **result)
+        u_tilt2d = result["field"]
+        error2d, n2d = result["residual"], result["iteration"]
+        if theta2d in theta_show:
+            tilt_fields.append(u_tilt2d)
         intensity2d = np.abs(u_tilt2d) ** 2
         x_center2d = np.sum(x2[None, :] * intensity2d) / np.sum(intensity2d)
         y_center2d = np.sum(x2[:, None] * intensity2d) / np.sum(intensity2d)

@@ -52,9 +52,13 @@ def finish_figure(fig, name):
     for ax in fig.axes:
         if ax.get_label() == "<colorbar>":
             continue
-        if ax.get_xscale() == "linear" and not isinstance(ax.xaxis.get_major_locator(), FixedLocator):
+        if ax.get_xscale() == "linear" and not isinstance(
+            ax.xaxis.get_major_locator(), FixedLocator
+        ):
             ax.xaxis.set_major_locator(MaxNLocator(nbins=5))
-        if ax.get_yscale() == "linear" and not isinstance(ax.yaxis.get_major_locator(), FixedLocator):
+        if ax.get_yscale() == "linear" and not isinstance(
+            ax.yaxis.get_major_locator(), FixedLocator
+        ):
             ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
     fig.savefig(FIGURE_DIR / (name + ".png"), dpi=300, bbox_inches="tight")
     fig.savefig(FIGURE_DIR / (name + ".pdf"), bbox_inches="tight")
@@ -65,190 +69,96 @@ def finish_figure(fig, name):
     plt.close(fig)
 
 
-def plot_base_amplitude(x, amplitude, gaussian, ax=None):
-    # 传入 ax 时用于组合图，否则保存单图
-    single = ax is None
-    if single:
-        fig, ax = plt.subplots()
+def plot_base_amplitude(x, amplitude, gaussian, ax):
     ax.plot(x, amplitude, color=BLUE, label="Numerical")
     ax.plot(x, gaussian, "--", color=RED, label="Gaussian")
     ax.set_xlabel(r"$x / \lambda$")
     ax.set_ylabel(r"$|U(x)|$")
     ax.set_ylim(bottom=0)
     ax.legend()
-    if single:
-        finish_figure(fig, "base_1d_amplitude")
 
 
-def plot_base_phase(x, u):
-    fig, ax = plt.subplots()
-    ax.plot(x, np.angle(u), color=BLUE)
-    ax.set_xlabel(r"$x / \lambda$")
-    ax.set_ylabel(r"$\arg U(x)$ (rad)")
-    ax.set_ylim(-np.pi, np.pi)
-    ax.set_yticks([-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi],
-                  [r"$-\pi$", r"$-\pi/2$", "0", r"$\pi/2$", r"$\pi$"])
-    finish_figure(fig, "base_1d_phase")
-
-
-def plot_gamma(gamma_list):
-    iteration = np.arange(1, len(gamma_list) + 1)
-
-    fig, ax = plt.subplots()
-    ax.plot(iteration, np.abs(gamma_list), color=BLUE)
-    ax.set_xlabel("Iteration")
-    ax.set_ylabel(r"$|\gamma_n|$")
-    finish_figure(fig, "base_gamma_abs")
-
-    fig, ax = plt.subplots()
-    ax.plot(iteration, np.angle(gamma_list), color=BLUE)
-    ax.set_xlabel("Iteration")
-    ax.set_ylabel(r"$\arg\gamma_n$ (rad)")
-    ax.set_ylim(-np.pi, np.pi)
-    ax.set_yticks([-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi],
-                  [r"$-\pi$", r"$-\pi/2$", "0", r"$\pi/2$", r"$\pi$"])
-    finish_figure(fig, "base_gamma_phase")
-
-
-def plot_error(error_list, ax=None):
+def plot_error(error_list, ax):
     iteration = np.arange(1, len(error_list) + 1)
-    # 传入 ax 时用于组合图，否则保存单图
-    single = ax is None
-    if single:
-        fig, ax = plt.subplots()
     ax.plot(iteration, error_list, color=BLUE)
-    ax.axhline(1e-4, color=GRAY, linestyle="--", linewidth=1.2, label=r"$10^{-4}$ threshold")
+    ax.axhline(
+        1e-4, color=GRAY, linestyle="--", linewidth=1.2, label=r"$10^{-4}$ threshold"
+    )
     ax.set_yscale("log")
     ax.set_xlabel("Iteration")
     ax.set_ylabel(r"Residual $\epsilon_n$")
     ax.legend()
-    if single:
-        finish_figure(fig, "base_error")
 
 
-def plot_base_2d(x, u2d):
-    extent = [x[0], x[-1], x[0], x[-1]]
-
-    fig, ax = plt.subplots(figsize=(4.2, 3.6), layout="compressed")
-    image = ax.imshow(
-        np.abs(u2d),
-        extent=extent,
-        origin="lower",
-        cmap="magma",
-        aspect="equal",
-        vmin=0,
-        vmax=1,
-        interpolation="nearest",
-    )
-    ax.set_xlabel(r"$x / \lambda$")
-    ax.set_ylabel(r"$y / \lambda$")
-    ax.set_xticks(np.linspace(x[0], x[-1], 5))
-    ax.set_yticks(np.linspace(x[0], x[-1], 5))
-    cbar = fig.colorbar(image, ax=ax, pad=0.03, fraction=0.046,
-                        ticks=np.linspace(0, 1, 6))
-    cbar.set_label(r"$|U(x,y)|$")
-    finish_figure(fig, "base_2d_amplitude")
-
-    fig, ax = plt.subplots(figsize=(4.2, 3.6), layout="compressed")
-    image = ax.imshow(
-        np.angle(u2d),
-        extent=extent,
-        origin="lower",
-        cmap="twilight",
-        aspect="equal",
-        vmin=-np.pi,
-        vmax=np.pi,
-        interpolation="nearest",
-    )
-    ax.set_xlabel(r"$x / \lambda$")
-    ax.set_ylabel(r"$y / \lambda$")
-    ax.set_xticks(np.linspace(x[0], x[-1], 5))
-    ax.set_yticks(np.linspace(x[0], x[-1], 5))
-    cbar = fig.colorbar(image, ax=ax, pad=0.03, fraction=0.046,
-                        ticks=[-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi])
-    cbar.ax.set_yticklabels([r"$-\pi$", r"$-\pi/2$", "0", r"$\pi/2$", r"$\pi$"])
-    cbar.set_label(r"$\arg U(x,y)$ (rad)")
-    finish_figure(fig, "base_2d_phase")
-
-
-def plot_base_compare(x, amplitude_1d, amplitude_2d, gaussian, ax=None):
-    # 传入 ax 时用于组合图，否则保存单图
-    single = ax is None
-    if single:
-        fig, ax = plt.subplots()
+def plot_base_compare(x, amplitude_1d, amplitude_2d, gaussian, ax):
     ax.plot(x, amplitude_1d, color=BLUE, label="1D Fox-Li")
-    ax.plot(x, amplitude_2d, "o", color=GREEN, markerfacecolor="none",
-            markevery=4, zorder=3, label="2D center line")
+    ax.plot(
+        x,
+        amplitude_2d,
+        "o",
+        color=GREEN,
+        markerfacecolor="none",
+        markevery=4,
+        zorder=3,
+        label="2D center line",
+    )
     ax.plot(x, gaussian, "--", color=RED, label="Gaussian")
     ax.set_xlabel(r"$x / \lambda$")
     ax.set_ylabel(r"$|U|$")
     ax.set_ylim(bottom=0)
     ax.legend()
-    if single:
-        finish_figure(fig, "base_1d_2d_compare")
 
 
-def plot_tilt_profile(y, amplitude_zero, amplitude_tilt, theta, ax=None):
-    # 传入 ax 时用于组合图，否则保存单图
-    single = ax is None
-    if single:
-        fig, ax = plt.subplots()
+def plot_tilt_profile(y, amplitude_zero, amplitude_tilt, theta, ax):
     ax.plot(y, amplitude_zero, "--", color=GRAY, label=r"$\theta=0$")
     ax.plot(y, amplitude_tilt, color=BLUE, label=rf"$\theta={theta:.3f}$ rad")
     ax.set_xlabel(r"$y / \lambda$")
     ax.set_ylabel(r"$|U(y)|$")
     ax.set_ylim(bottom=0)
     ax.legend()
-    if single:
-        finish_figure(fig, "tilt_profile")
 
 
-def plot_tilt_center(theta, center, distance, ax=None):
-    # 传入 ax 时用于组合图，否则保存单图
-    single = ax is None
-    if single:
-        fig, ax = plt.subplots()
-    ax.plot(theta, center, "o", color=BLUE, markerfacecolor="none",
-            zorder=3, label="Numerical")
+def plot_tilt_center(theta, center, distance, ax):
+    ax.plot(
+        theta,
+        center,
+        "o",
+        color=BLUE,
+        markerfacecolor="none",
+        zorder=3,
+        label="Numerical",
+    )
     ax.plot(theta, -distance * theta, "--", color=RED, label=r"$-L\theta$")
     ax.axhline(0, color=LIGHT_GRAY, linewidth=0.8, zorder=0)
     ax.axvline(0, color=LIGHT_GRAY, linewidth=0.8, zorder=0)
     ax.set_xlabel(r"Mirror tilt $\theta$ (rad)")
     ax.set_ylabel(r"Beam center $y_c / \lambda$")
     ax.legend()
-    if single:
-        finish_figure(fig, "tilt_center")
 
 
-def plot_tilt_width(theta, width, ax=None):
-    # 传入 ax 时用于组合图，否则保存单图
-    single = ax is None
-    if single:
-        fig, ax = plt.subplots()
+def plot_tilt_width(theta, width, ax):
     ax.plot(theta, width, "o-", color=BLUE, markerfacecolor="white")
     ax.set_xlabel(r"Mirror tilt $\theta$ (rad)")
     ax.set_ylabel(r"Mode radius $w_y / \lambda$")
-    if single:
-        finish_figure(fig, "tilt_width")
 
 
-def plot_tilt_loss(theta, loss, ax=None):
-    # 传入 ax 时用于组合图，否则保存单图
-    single = ax is None
-    if single:
-        fig, ax = plt.subplots()
+def plot_tilt_loss(theta, loss, ax):
     ax.plot(theta, np.asarray(loss) * 100, "o-", color=RED, markerfacecolor="white")
     ax.set_xlabel(r"Mirror tilt $\theta$ (rad)")
     ax.set_ylabel("Round-trip diffraction loss (%)")
     ax.ticklabel_format(axis="y", style="plain", useOffset=False)
     ax.set_ylim(bottom=0)
-    if single:
-        finish_figure(fig, "tilt_loss")
 
 
 def plot_tilt_2d(x, fields, theta_list, name="tilt_2d"):
-    fig, axes = plt.subplots(1, len(theta_list), figsize=(9.2, 3.1),
-                             sharex=True, sharey=True, layout="compressed")
+    fig, axes = plt.subplots(
+        1,
+        len(theta_list),
+        figsize=(9.2, 3.1),
+        sharex=True,
+        sharey=True,
+        layout="compressed",
+    )
     extent = [x[0], x[-1], x[0], x[-1]]
 
     for index, (ax, u, theta) in enumerate(zip(axes, fields, theta_list)):
@@ -269,18 +179,32 @@ def plot_tilt_2d(x, fields, theta_list, name="tilt_2d"):
         if index == 0:
             ax.set_ylabel(r"$y / \lambda$")
 
-    cbar = fig.colorbar(image, ax=axes.tolist(), pad=0.02, fraction=0.025,
-                        ticks=np.linspace(0, 1, 6))
+    cbar = fig.colorbar(
+        image, ax=axes.tolist(), pad=0.02, fraction=0.025, ticks=np.linspace(0, 1, 6)
+    )
     cbar.set_label(r"$|U(x,y)|$")
     finish_figure(fig, name)
 
 
-def plot_report_base(x, amplitude, gaussian, x2, amplitude_2d):
-    fig, axes = plt.subplots(1, 2, figsize=(9.2, 3.5), sharey=True)
+def plot_report_base(x, u, gaussian, x2, amplitude_2d):
+    fig, axes = plt.subplots(1, 3, figsize=(10.8, 3.6))
+    amplitude = np.abs(u)
     plot_base_amplitude(x, amplitude, gaussian, ax=axes[0])
-    plot_base_compare(x2, amplitude[::2], amplitude_2d, gaussian[::2], ax=axes[1])
-    axes[0].set_title("(a) 1D mode validation", loc="left")
-    axes[1].set_title("(b) 1D and 2D comparison", loc="left")
+    # 只选择中心相位为参考，不改变计算场
+    center = np.argmin(np.abs(x))
+    phase = np.angle(u * np.exp(-1j * np.angle(u[center])))
+    axes[1].plot(x, phase, color=BLUE)
+    axes[1].set_xlabel(r"$x / \lambda$")
+    axes[1].set_ylabel(r"$\phi(x)-\phi(0)$ (rad)")
+    axes[1].set_ylim(-np.pi, np.pi)
+    axes[1].set_yticks(
+        [-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi],
+        [r"$-\pi$", r"$-\pi/2$", "0", r"$\pi/2$", r"$\pi$"],
+    )
+    plot_base_compare(x2, amplitude[::2], amplitude_2d, gaussian[::2], ax=axes[2])
+    axes[0].set_title("(a) 1D amplitude", loc="left")
+    axes[1].set_title("(b) Relative phase", loc="left")
+    axes[2].set_title("(c) 1D/2D comparison", loc="left")
     finish_figure(fig, "report_base_validation")
 
 
@@ -321,8 +245,16 @@ def plot_report_base_2d(x, u2d):
             label = r"$\arg U(x,y)$ (rad)"
             title = "(b) Phase"
 
-        image = ax.imshow(data, extent=extent, origin="lower", cmap=cmap,
-                          vmin=low, vmax=high, aspect="equal", interpolation="nearest")
+        image = ax.imshow(
+            data,
+            extent=extent,
+            origin="lower",
+            cmap=cmap,
+            vmin=low,
+            vmax=high,
+            aspect="equal",
+            interpolation="nearest",
+        )
         ax.set_xlabel(r"$x / \lambda$")
         ax.set_ylabel(r"$y / \lambda$")
         ax.set_xticks(np.linspace(x[0], x[-1], 5))
@@ -336,16 +268,29 @@ def plot_report_base_2d(x, u2d):
     finish_figure(fig, "report_base_2d")
 
 
-def plot_report_tilt(y, amplitude_zero, amplitude_tilt, theta,
-                     theta_list, center_list, distance,
-                     theta_change, width_change, loss_change):
+def plot_report_tilt(
+    y,
+    amplitude_zero,
+    amplitude_tilt,
+    theta,
+    theta_list,
+    center_list,
+    distance,
+    theta_change,
+    width_change,
+    loss_change,
+):
     fig, axes = plt.subplots(2, 2, figsize=(9.2, 7))
     plot_tilt_profile(y, amplitude_zero, amplitude_tilt, theta, ax=axes[0, 0])
     plot_tilt_center(theta_list, center_list, distance, ax=axes[0, 1])
     plot_tilt_width(theta_change, width_change, ax=axes[1, 0])
     plot_tilt_loss(theta_change, loss_change, ax=axes[1, 1])
-    titles = ["(a) Mode profiles", "(b) Beam displacement",
-              "(c) Mode radius", "(d) Diffraction loss"]
+    titles = [
+        "(a) Mode profiles",
+        "(b) Beam displacement",
+        "(c) Mode radius",
+        "(d) Diffraction loss",
+    ]
     for ax, title in zip(axes.flat, titles):
         ax.set_title(title, loc="left")
     finish_figure(fig, "report_tilt_quantitative")

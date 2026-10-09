@@ -294,3 +294,44 @@ def plot_report_tilt(
     for ax, title in zip(axes.flat, titles):
         ax.set_title(title, loc="left")
     finish_figure(fig, "report_tilt_quantitative")
+
+
+def plot_bump_fields(x, results, titles, name="bump_mode"):
+    # 与原二维图保持相同的颜色、相位掩膜和坐标范围
+    fig, axes = plt.subplots(3, len(results), figsize=(10.8, 9),
+                             sharex=True, sharey=True, layout="compressed")
+    extent = [x[0], x[-1], x[0], x[-1]]
+    phase_map = plt.get_cmap("twilight").copy()
+    phase_map.set_bad("white")
+    height_max = max(np.max(result["height"]) for result in results)
+    for col, (result, title) in enumerate(zip(results, titles)):
+        if not result["converged"]:
+            raise ValueError("不能把未收敛场绘制为稳态模式")
+        u = result["field"]
+        amplitude = np.abs(u)
+        # 用振幅峰值处作相位参考，避免离轴模式中心接近零
+        phase = np.angle(u * np.exp(-1j * np.angle(u.flat[np.argmax(amplitude)])))
+        phase = np.ma.masked_where(amplitude < 0.1 * amplitude.max(), phase)
+        data = [amplitude, phase, result["height"]]
+        for row, (values, cmap, low, high) in enumerate(zip(
+                data, ["magma", phase_map, "viridis"],
+                [0, -np.pi, 0], [1, np.pi, height_max])):
+            ax = axes[row, col]
+            image = ax.imshow(values, extent=extent, origin="lower", cmap=cmap,
+                              vmin=low, vmax=high, interpolation="nearest", aspect="equal")
+            ax.set_xticks(np.linspace(x[0], x[-1], 5))
+            ax.set_yticks(np.linspace(x[0], x[-1], 5))
+            if row == 0:
+                ax.set_title(title)
+            if col == 0:
+                ax.set_ylabel(r"$y / \lambda$")
+            if row == 2:
+                ax.set_xlabel(r"$x / \lambda$")
+            if col == len(results) - 1:
+                ticks = [-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi] if row == 1 else None
+                cbar = fig.colorbar(image, ax=axes[row].tolist(), pad=0.02,
+                                    fraction=0.025, ticks=ticks)
+                cbar.set_label([r"$|U(x,y)|$", r"Relative phase (rad)", r"$h / \lambda$"][row])
+                if row == 1:
+                    cbar.ax.set_yticklabels([r"$-\pi$", r"$-\pi/2$", "0", r"$\pi/2$", r"$\pi$"])
+    finish_figure(fig, name)

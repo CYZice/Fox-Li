@@ -8,7 +8,6 @@ from plot_results import plot_report_tilt, plot_tilt_2d
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "figures" / "data"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def calc_tilt(theta, x, kernel, iteration=3000):
@@ -82,6 +81,7 @@ def calc_tilt2d(theta, x, kernel, iteration=3000):
 
 # 进阶任务：单镜倾斜，扫描倾角并输出报告图
 def run_tilt():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     x = np.linspace(-10, 10, 101)
     kernel = make_kernel(x)
 

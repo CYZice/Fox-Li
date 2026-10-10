@@ -159,10 +159,10 @@ def main():
         label = f"r={point[2]}, x0={point[0]}"
         steps = np.arange(1, result["iteration"] + 1)
         axes[0].semilogy(steps, result["errors"], color=color, label=label)
-        axes[1].plot(steps, np.abs(result["mu_list"]), color=color, label=label)
+        axes[1].semilogy(steps, np.abs(1 / result["mu_list"]), color=color, label=label)
     axes[0].axhline(1e-4, color=GRAY, linestyle="--")
     axes[0].set(xlabel="Iteration", ylabel="Self-reproduction residual", title="(a) Field residual")
-    axes[1].set(xlabel="Iteration", ylabel=r"$|\mu_n|$", title="(b) Round-trip eigenvalue estimate")
+    axes[1].set(xlabel="Iteration", ylabel=r"$|\gamma_n|$", title="(b) Round-trip eigenvalue estimate")
     for ax in axes:
         ax.legend()
     finish_figure(fig, "bump_convergence")

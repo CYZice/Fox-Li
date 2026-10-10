@@ -3,8 +3,10 @@ import time
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
-
 import numpy as np
+import bump
+from base import make_kernel, propagate, propagate2d, calc_stats
+from tilt import calc_tilt, calc_tilt2d
 import matplotlib
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -17,113 +19,7 @@ GRAY = "#666666"
 PHASE_TICKS = [-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi]
 PHASE_LABELS = [r"$-\pi$", r"$-\pi/2$", "0", r"$\pi/2$", r"$\pi$"]
 
-# 核心函数与 main.py 一致；不导入其顶层扫描和文件输出
-def make_kernel(x):
-    dx = x[1] - x[0]
-    # 长度都用波长作单位
-    k = 2 * np.pi
-    distance = 100
-    radius = distance  # 对称共焦腔
-
-    c = np.sqrt(1j / distance)
-    kernel = np.zeros((len(x), len(x)), dtype=complex)
-
-    for j in range(len(x)):
-        for i in range(len(x)):
-            # 两镜面之间的近轴光程
-            rho = (
-                distance
-                + (x[j] - x[i]) ** 2 / (2 * distance)
-                - (x[j] ** 2 + x[i] ** 2) / (2 * radius)
-            )
-            kernel[j, i] = c * np.exp(-1j * k * rho) * dx
-
-    return kernel
-
-
-def propagate(u, kernel):
-    u2 = kernel @ u
-
-    return u2
-
-
-def calc_tilt(theta, x, kernel, iteration=3000):
-    k = 2 * np.pi
-    u = np.ones(len(x), dtype=complex)
-    stable = 0
-
-    for n in range(iteration):
-        # 从正常镜传播到倾斜镜
-        u2 = propagate(u, kernel)
-
-        # 倾斜镜反射后产生线性相位
-        phase = np.exp(1j * 2 * k * theta * x)
-        u2 = u2 * phase
-
-        # 再传播回正常镜
-        u2 = propagate(u2, kernel)
-
-        mu = np.vdot(u, u2) / np.vdot(u, u)
-        error = np.linalg.norm(u2 - mu * u) / np.linalg.norm(u2)
-        u = u2 / np.max(np.abs(u2))
-
-        if error < 1e-4:
-            stable += 1
-        else:
-            stable = 0
-
-        if stable >= 10:
-            break
-
-    return u, mu, error, n + 1
-
-
-def make_kernel2d(x):
-    dx = x[1] - x[0]
-    k = 2 * np.pi
-    distance = 100
-    kernel = np.zeros((len(x), len(x)), dtype=complex)
-
-    for j in range(len(x)):
-        for i in range(len(x)):
-            kernel[j, i] = (
-                np.exp(1j * k * x[j] * x[i] / distance)
-                * dx
-            )
-
-    return kernel
-
-
-def propagate2d(u, kernel):
-    return kernel @ u @ kernel.T
-
-
-def calc_tilt2d(theta, x, kernel, iteration=3000):
-    k = 2 * np.pi
-    u = np.ones((len(x), len(x)), dtype=complex)
-    phase = np.exp(1j * 2 * k * theta * x)[:, None]
-    stable = 0
-
-    for n in range(iteration):
-        u2 = propagate2d(u, kernel)
-        u2 = phase * u2
-        u2 = propagate2d(u2, kernel)
-
-        mu = np.vdot(u, u2) / np.vdot(u, u)
-        error = np.linalg.norm(u2 - mu * u) / np.linalg.norm(u2)
-        u = u2 / np.max(np.abs(u2))
-
-        if error < 1e-4:
-            stable += 1
-        else:
-            stable = 0
-
-        if stable >= 10:
-            break
-
-    return u, error, n + 1
-
-
+# 复用正式计算函数；不调用扫描和文件输出入口
 def compute_base():
     x = np.linspace(-10, 10, 101)
     kernel = make_kernel(x)
@@ -149,17 +45,26 @@ def compute_base():
     amplitude = np.abs(u)
     positive = x >= 0
     index = np.argmin(np.abs(amplitude[positive] - 1 / np.e))
-    x2 = np.linspace(-10, 10, 51)
-    kernel2d = make_kernel2d(x2)
-    u2d = np.ones((51, 51), dtype=complex)
-    # 基础二维与 main.py 一样，使用一维迭代次数
-    for n in range(len(gamma_list)):
-        u2d = propagate2d(u2d, kernel2d)
-        u2d = u2d / np.max(np.abs(u2d))
-
+    x2 = x
+    u2d = np.ones((len(x), len(x)), dtype=complex)
+    stable2d = 0
+    errors2d = []
+    # 二维单独判断，不照搬一维迭代次数
+    for n in range(1000):
+        field = propagate2d(u2d, kernel)
+        mu = np.vdot(u2d, field) / np.vdot(u2d, u2d)
+        error = np.linalg.norm(field - mu * u2d) / np.linalg.norm(field)
+        errors2d.append(error)
+        u2d = field / np.max(np.abs(field))
+        stable2d = stable2d + 1 if error < 1e-4 else 0
+        if stable2d >= 10:
+            break
+    stats = calc_stats(x, u2d, kernel)
     return {"x": x, "u": u, "x2": x2, "u2d": u2d,
             "gamma": np.array(gamma_list), "error": np.array(error_list),
-            "radius": x[positive][index], "converged": stable >= 10}
+            "radius": x[positive][index], "converged": stable >= 10,
+            "iteration2d": len(errors2d), "error2d": stats["residual"],
+            "converged2d": stable2d >= 10 and stats["residual"] < 1e-4}
 
 
 def set_style():
@@ -177,48 +82,47 @@ def set_style():
 
 def make_tilt_reference():
     x = np.linspace(-10, 10, 101)
-    x2 = np.linspace(-10, 10, 51)
     kernel = make_kernel(x)
-    u_zero, mu_x, _, _ = calc_tilt(0, x, kernel)
-    return {"x": x, "kernel": kernel, "x2": x2,
-            "kernel2d": make_kernel2d(x2), "u_zero": u_zero, "mu_x": mu_x}
+    u_zero, _, _, _, converged = calc_tilt(0, x, kernel)
+    if not converged:
+        raise ValueError("无扰动参考场未收敛")
+    return {"x": x, "kernel": kernel, "x2": x, "u_zero": u_zero}
 
 
 def compute_tilt(theta, reference):
-    x, x2 = reference["x"], reference["x2"]
-    u, mu, error, iteration = calc_tilt(theta, x, reference["kernel"])
-    intensity = np.abs(u) ** 2
-    center = np.sum(x * intensity) / np.sum(intensity)
-    width = 2 * np.sqrt(np.sum((x - center) ** 2 * intensity) / np.sum(intensity))
-    # 两个物理方向的完整往返本征值；与报告损耗口径一致
-    loss = 1 - np.abs(reference["mu_x"] * mu) ** 2
-    u2d, error2d, iteration2d = calc_tilt2d(theta, x2, reference["kernel2d"])
-    intensity2d = np.abs(u2d) ** 2
-    center2d = np.sum(x2[:, None] * intensity2d) / np.sum(intensity2d)
-    width2d = 2 * np.sqrt(
-        np.sum((x2[:, None] - center2d) ** 2 * intensity2d) / np.sum(intensity2d)
-    )
-    return {"theta": theta, "u": u, "u2d": u2d, "center": center,
-            "width": width, "loss": loss, "error": error, "iteration": iteration,
-            "center2d": center2d, "width2d": width2d,
-            "error2d": error2d, "iteration2d": iteration2d}
+    x, kernel = reference["x"], reference["kernel"]
+    u, _, error, iteration, converged = calc_tilt(theta, x, kernel)
+    phase = np.exp(1j * 4 * np.pi * theta * x)[:, None]
+    stats = calc_stats(x, np.outer(u, reference["u_zero"]), kernel, phase)
+    result = calc_tilt2d(theta, x, kernel)
+    valid = converged and stats["residual"] < 1e-4
+    return {"theta": theta, "u": u, "u2d": result["field"],
+            "center": stats["yc"] if valid else np.nan,
+            "width": stats["wy"] if valid else np.nan,
+            "loss": result["loss"] if result["converged"] else np.nan,
+            "error": error, "iteration": iteration,
+            "converged": valid, "converged2d": result["converged"],
+            "center2d": result["yc"] if result["converged"] else np.nan,
+            "width2d": result["wy"] if result["converged"] else np.nan,
+            "error2d": result["residual"], "iteration2d": result["iteration"]}
 
 
 def compute_scan(reference):
-    x = reference["x"]
+    x, kernel = reference["x"], reference["kernel"]
     scans = []
     seconds = []
     for theta_list in [np.linspace(-0.01, 0.01, 21), np.linspace(0, 0.05, 11)]:
         start = time.perf_counter()
         rows = []
         for theta in theta_list:
-            u, mu, error, iteration = calc_tilt(theta, x, reference["kernel"])
-            intensity = np.abs(u) ** 2
-            center = np.sum(x * intensity) / np.sum(intensity)
-            width = 2 * np.sqrt(np.sum((x - center) ** 2 * intensity) / np.sum(intensity))
-            mu_total = reference["mu_x"] * mu
-            loss = 1 - np.abs(mu_total) ** 2
-            rows.append([theta, center, width, np.abs(mu_total), loss, iteration, error])
+            u, _, _, iteration, converged = calc_tilt(theta, x, kernel)
+            phase = np.exp(1j * 4 * np.pi * theta * x)[:, None]
+            stats = calc_stats(x, np.outer(u, reference["u_zero"]), kernel, phase)
+            valid = converged and stats["residual"] < 1e-4
+            values = [stats[key] if valid else np.nan for key in ("yc", "wy")]
+            mu_abs = abs(stats["mu"]) if valid else np.nan
+            loss = stats["loss"] if valid else np.nan
+            rows.append([theta, *values, mu_abs, loss, iteration, stats["residual"]])
         scans.append(np.array(rows))
         seconds.append(time.perf_counter() - start)
     return {"center": scans[0], "change": scans[1], "seconds": seconds}
@@ -287,7 +191,7 @@ def draw_base(fig, result):
     ax.set(title="一维振幅", xlabel=r"$x/\lambda$", ylabel=r"$|U(x)|$", ylim=(0, 1.05))
     ax.legend(loc="upper right")
     ax = axes[0, 1]
-    ax.plot(x, np.angle(u), color=BLUE)
+    ax.plot(x, np.angle(u * np.exp(-1j * np.angle(u[len(x)//2]))), color=BLUE)
     ax.set(title="一维相位", xlabel=r"$x/\lambda$", ylabel="相位 (rad)", ylim=(-np.pi, np.pi))
     ax.set_yticks(PHASE_TICKS, labels=PHASE_LABELS)
     draw_field(fig, axes[1, 0], result["x2"], result["u2d"])
@@ -345,6 +249,8 @@ class Demo:
         self.pending_tilt = None
         self.scan = None
         self.scan_after = None
+        self.bump_reference = None
+        self.bump_after = None
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.title("Fox-Li 光学谐振腔仿真")
         width = min(1200, root.winfo_screenwidth() - 60)
@@ -367,7 +273,7 @@ class Demo:
         bar.pack(fill="x")
         self.add_button(bar, "运行", self.run_base).pack(side="left", padx=(0, 12))
         ttk.Label(bar, text="对称共焦腔   L/λ = R/λ = 100   "
-                  "网格：一维 101，二维 51×51   收敛阈值：1e-4（连续 10 次）").pack(side="left")
+                  "网格：一维 101，二维 101×101   收敛阈值：1e-4（连续 10 次）").pack(side="left")
         self.base_info = tk.StringVar(value="")
         ttk.Label(self.base_page, textvariable=self.base_info, padding=(10, 0, 10, 5)).pack(fill="x")
         self.base_fig, self.base_canvas = self.make_canvas(self.base_page)
@@ -406,6 +312,24 @@ class Demo:
         plots = ttk.Frame(self.tilt_page)
         plots.pack(side="left", fill="both", expand=True)
         self.tilt_fig, self.tilt_canvas = self.make_canvas(plots)
+        self.bump_page = ttk.Frame(self.tabs)
+        self.tabs.add(self.bump_page, text="镜面局部凸起")
+        bar = ttk.Frame(self.bump_page, padding=8)
+        bar.pack(fill="x")
+        self.bump_x = tk.DoubleVar(value=0)
+        self.bump_y = tk.DoubleVar(value=0)
+        self.bump_r = tk.DoubleVar(value=2)
+        for text, variable in [("x₀/λ", self.bump_x), ("y₀/λ", self.bump_y),
+                               ("r_b/λ", self.bump_r)]:
+            ttk.Label(bar, text=text).pack(side="left", padx=(8, 3))
+            ttk.Spinbox(bar, from_=-8 if variable != self.bump_r else 0,
+                        to=8, increment=0.5, width=6,
+                        textvariable=variable).pack(side="left")
+        self.add_button(bar, "计算局部凸起", self.run_bump).pack(side="left", padx=15)
+        self.bump_info = tk.StringVar(value="101×101 网格；损耗为有限网格结果。设置半球位置和半径后计算")
+        ttk.Label(self.bump_page, textvariable=self.bump_info,
+                  padding=(12, 0, 10, 4)).pack(fill="x")
+        self.bump_fig, self.bump_canvas = self.make_canvas(self.bump_page)
         self.scan_page = ttk.Frame(self.tabs)
         self.tabs.add(self.scan_page, text="参数扫描")
         bar = ttk.Frame(self.scan_page, padding=8)
@@ -455,8 +379,10 @@ class Demo:
         draw_base(self.base_fig, self.base)
         self.base_canvas.draw()
         self.base_info.set(
-            f"迭代次数：{len(self.base['gamma'])}   数值 1/e 半径：{self.base['radius']:.4f} λ   "
-            f"理论半径：{np.sqrt(100 / np.pi):.4f} λ   最终残差：{self.base['error'][-1]:.3e}"
+            f"一维迭代：{len(self.base['gamma'])}   数值 1/e 半径：{self.base['radius']:.4f} λ   "
+            f"理论半径：{np.sqrt(100 / np.pi):.4f} λ   "
+            f"二维迭代：{self.base['iteration2d']}，往返残差：{self.base['error2d']:.3e}"
+            + ("" if self.base["converged"] and self.base["converged2d"] else "   未达到收敛判据")
         )
 
     def show_convergence(self):
@@ -542,7 +468,79 @@ class Demo:
         self.cancel_tilt()
         if self.scan_after is not None:
             self.root.after_cancel(self.scan_after)
+        if self.bump_after is not None:
+            self.root.after_cancel(self.bump_after)
         self.root.destroy()
+
+    def run_bump(self):
+        if self.busy:
+            return
+        x0, y0, radius = self.bump_x.get(), self.bump_y.get(), self.bump_r.get()
+        if radius < 0:
+            messagebox.showerror("参数错误", "凸起半径不能为负数", parent=self.root)
+            return
+        self.set_busy(True)
+        self.bump_info.set("二维往返计算中……")
+        self.bump_done = threading.Event()
+        self.bump_error = None
+        self.bump_input = (x0, y0, radius)
+        threading.Thread(target=self.bump_worker, daemon=True).start()
+        self.bump_after = self.root.after(50, self.check_bump)
+
+    def bump_worker(self):
+        try:
+            x = np.linspace(-10, 10, 101)
+            kernel = bump.make_kernel(x)
+            if self.bump_reference is None:
+                self.bump_reference = bump.calc_bump(x, kernel, radius=0)
+            result = bump.calc_bump(x, kernel, *self.bump_input)
+            self.bump_result = (x, result)
+        except Exception as error:
+            self.bump_error = error
+        finally:
+            self.bump_done.set()
+
+    def check_bump(self):
+        self.bump_after = None
+        if not self.bump_done.is_set():
+            self.bump_after = self.root.after(50, self.check_bump)
+            return
+        try:
+            if self.bump_error is not None:
+                raise self.bump_error
+            x, result = self.bump_result
+            x0, y0, radius = self.bump_input
+            self.bump_fig.clear()
+            axes = self.bump_fig.subplots(2, 2)
+            axes[0, 0].imshow(result["height"], extent=(-10, 10, -10, 10),
+                              origin="lower", cmap="viridis")
+            axes[0, 0].set_title("半球凸起高度")
+            axes[0, 1].imshow(np.abs(result["field"]), extent=(-10, 10, -10, 10),
+                              origin="lower", cmap="magma", vmin=0, vmax=1)
+            axes[0, 1].set_title("自再现模式振幅" if result["converged"] else "暂态振幅（未收敛）")
+            axes[1, 0].plot(x, np.abs(self.bump_reference["field"][len(x)//2]),
+                            "--", color=GRAY, label="无凸起")
+            axes[1, 0].plot(x, np.abs(result["field"][len(x)//2]),
+                            color=BLUE, label="局部凸起")
+            axes[1, 0].set(xlabel="x / λ", ylabel="中心截线振幅")
+            axes[1, 0].legend()
+            axes[1, 1].semilogy(result["errors"], color=BLUE)
+            axes[1, 1].axhline(1e-4, color=GRAY, linestyle="--")
+            axes[1, 1].set(xlabel="迭代次数", ylabel="自再现残差")
+            self.bump_canvas.draw()
+            converged = "已收敛" if result["converged"] else "未达到收敛判据"
+            info = (f"P=({x0:g}, {y0:g})λ，r_b={radius:g}λ | {converged} | "
+                    f"迭代 {result['iteration']} 次，残差 {result['residual']:.2e}")
+            if result["converged"] and self.bump_reference["converged"]:
+                info += (f" | 往返损耗 {result['loss'] * 100:.4f}% | "
+                         f"与无缺陷基模重叠度 {bump.overlap(result['field'], self.bump_reference['field']):.4f}")
+            self.bump_info.set(info)
+            self.status.set("局部凸起计算完成")
+        except Exception as error:
+            self.status.set("计算失败")
+            messagebox.showerror("局部凸起计算失败", str(error), parent=self.root)
+        finally:
+            self.set_busy(False)
 
     def show_tilt(self):
         result = self.tilt
@@ -554,10 +552,12 @@ class Demo:
             f"理论值 -Lθ/λ：{theory:.6f}\n"
             f"偏差/λ：{result['center'] - theory:+.3e}\n"
             f"模半径 w_y/λ：{result['width']:.6f}\n"
-            f"往返衍射损耗：{result['loss'] * 100:.6f}%\n"
             f"迭代次数：{result['iteration']}\n"
             f"最终残差：{result['error']:.3e}\n\n"
-            f"二维场\n"
+            f"二维场（101×101）\n"
+            + (f"二维往返损耗：{result['loss'] * 100:.6f}%\n"
+               if result["converged2d"] else "未收敛，不报告稳态损耗\n")
+            +
             f"光束中心 y_c/λ：{result['center2d']:.6f}\n"
             f"模半径 w_y/λ：{result['width2d']:.6f}\n"
             f"迭代次数：{result['iteration2d']}\n"

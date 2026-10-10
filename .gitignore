@@ -1,0 +1,39 @@
+# 只公开最终代码、报告和必要的排版源码。
+/*
+!/.gitignore
+!/README.md
+!/运行说明.md
+!/提交清单.md
+!/report.pdf
+!/FoxLiDemo.exe
+!/src/
+!/latex/
+!/figures/
+
+# 只保留运行计算与演示所需源码。
+/src/*
+!/src/main.py
+!/src/base.py
+!/src/tilt.py
+!/src/bump.py
+!/src/plot_results.py
+!/src/demo.py
+!/src/requirements.txt
+
+# 不提交 aux、log、synctex、重复 PDF 等编译产物。
+/latex/*
+!/latex/report.tex
+!/latex/references.bib
+
+# 仅保留报告实际引用的图件；其他图像和计算数据不公开。
+/figures/*
+!/figures/report_fox_li_flow.pdf
+!/figures/report_base_validation.pdf
+!/figures/report_convergence.pdf
+!/figures/report_base_2d.pdf
+!/figures/report_tilt_2d.pdf
+!/figures/report_tilt_quantitative.pdf
+!/figures/bump_mode.pdf
+!/figures/bump_convergence.pdf
+!/figures/bump_radius.pdf
+!/figures/bump_position.pdf

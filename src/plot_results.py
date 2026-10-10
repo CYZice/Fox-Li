@@ -267,30 +267,42 @@ def plot_report_base_2d(x, u2d):
 
 
 def plot_report_tilt(
-    y,
-    amplitude_zero,
-    amplitude_tilt,
-    theta,
     theta_list,
     center_list,
+    width_x,
+    width_y,
+    loss_list,
+    mu_abs,
     distance,
-    theta_change,
-    width_change,
-    loss_change,
 ):
-    fig, axes = plt.subplots(2, 2, figsize=(9.2, 7))
-    plot_tilt_profile(y, amplitude_zero, amplitude_tilt, theta, ax=axes[0, 0])
-    plot_tilt_center(theta_list, center_list, distance, ax=axes[0, 1])
-    plot_tilt_width(theta_change, width_change, ax=axes[1, 0])
-    plot_tilt_loss(theta_change, loss_change, ax=axes[1, 1])
+    fig, axes = plt.subplots(2, 2, figsize=(9.2, 7), sharex=True)
+    plot_tilt_center(theta_list, center_list, distance, ax=axes[0, 0])
+    axes[0, 1].plot(theta_list, width_x, "s--", color=GRAY,
+                    markerfacecolor="white", label=r"$w_x$")
+    axes[0, 1].plot(theta_list, width_y, "o-", color=BLUE,
+                    markerfacecolor="white", label=r"$w_y$")
+    axes[0, 1].set_ylabel(r"Second-moment radius $w / \lambda$")
+    axes[0, 1].legend()
+    plot_tilt_loss(theta_list, loss_list, ax=axes[1, 0])
+    # 沿用报告定义：gamma_rt = 1 / mu_rt
+    gamma_abs = 1 / np.asarray(mu_abs)
+    axes[1, 1].plot(theta_list, gamma_abs, "o-", color=GREEN,
+                    markerfacecolor="white")
+    axes[1, 1].set_ylabel(r"$|\gamma_{\mathrm{rt}}|$")
+    axes[1, 1].ticklabel_format(axis="y", style="plain", useOffset=False)
     titles = [
-        "(a) Mode profiles",
-        "(b) Beam displacement",
-        "(c) Mode radius",
-        "(d) Diffraction loss",
+        "(a) Beam displacement",
+        "(b) Mode radii",
+        "(c) Round-trip diffraction loss",
+        "(d) Round-trip eigenvalue magnitude",
     ]
+    margin = 0.02 * (theta_list[-1] - theta_list[0])
     for ax, title in zip(axes.flat, titles):
         ax.set_title(title, loc="left")
+        ax.set_xlabel(r"Mirror tilt $\theta$ (rad)")
+        ax.set_xlim(theta_list[0] - margin, theta_list[-1] + margin)
+        ax.set_xticks(np.linspace(theta_list[0], theta_list[-1], 6))
+        ax.tick_params(axis="x", labelbottom=True)
     finish_figure(fig, "report_tilt_quantitative")
 
 

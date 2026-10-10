@@ -176,8 +176,6 @@ def run_tilt():
 
     # 再把角度放大一些，看模宽和损耗怎么变化
     theta_change = np.linspace(0, 0.05, 11)
-    width_change = []
-    loss_change = []
     change_rows = []
 
     for theta_scan in theta_change:
@@ -193,8 +191,6 @@ def run_tilt():
         mu_total_scan = stats["mu"]
         loss_scan = stats["loss"]
 
-        width_change.append(width_scan)
-        loss_change.append(loss_scan)
         change_rows.append([theta_scan, width_scan, loss_scan, center_scan,
                             stats["wx"], abs(stats["mu"]), stats["residual"],
                             n_scan, int(converged)])
@@ -208,9 +204,10 @@ def run_tilt():
                 loss_scan,
             )
 
+    change_data = np.array(change_rows)
     np.savetxt(
         DATA_DIR / "tilt_change.csv",
-        change_rows,
+        change_data,
         delimiter=",",
         header="theta_rad,w_y_lambda,round_trip_loss_2d,y_center_lambda,w_x_lambda,mu_2d_abs,residual_2d,iteration_1d,converged",
         comments="",
@@ -261,14 +258,11 @@ def run_tilt():
 
     # 报告组合图，直接使用上面的计算结果
     plot_report_tilt(
-        x,
-        amplitude_zero,
-        amplitude_tilt,
-        theta,
-        theta_list,
-        center_list,
-        100,
         theta_change,
-        width_change,
-        loss_change,
+        change_data[:, 3],
+        change_data[:, 4],
+        change_data[:, 1],
+        change_data[:, 2],
+        change_data[:, 5],
+        100,
     )

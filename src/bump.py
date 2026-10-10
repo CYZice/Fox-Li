@@ -1,3 +1,4 @@
+# 陈昀泽 · U202413823 · 光实2401
 """镜面局部半球凸起的二维 Fox-Li 仿真。"""
 
 from pathlib import Path

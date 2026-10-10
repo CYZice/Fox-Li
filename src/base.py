@@ -119,7 +119,7 @@ def run_base():
     assert stable >= 10 and stable2d >= 10 and stats["residual"] < 1e-4
     print("基础二维迭代次数、往返残差、往返损耗:", len(errors2d), stats["residual"], stats["loss"])
     data = Path(__file__).resolve().parent.parent / "figures" / "data"
-    data.mkdir(exist_ok=True)
+    data.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(data / "base_1d.npz", x=x, field=u, gaussian=gaussian,
                         gamma_history=gamma_list, residual_history=error_list,
                         mu_single=mu1, residual_single=residual1, converged=stable >= 10)

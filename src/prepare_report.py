@@ -48,7 +48,7 @@ def make_single_figures():
     phase = np.angle(field * np.exp(-1j * np.angle(field.flat[np.argmax(amplitude)])))
     for name, values, cmap, low, high, label in [
             ("base_2d_amplitude", amplitude, "magma", 0, 1, r"$|U(x,y)|$"),
-            ("base_2d_phase", np.ma.masked_where(amplitude < 0.1, phase),
+            ("base_2d_phase", phase,
              "twilight", -np.pi, np.pi, "Relative phase (rad)")]:
         fig, ax = plt.subplots(layout="compressed")
         cmap = plt.get_cmap(cmap).copy()

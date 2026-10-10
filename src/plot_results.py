@@ -233,14 +233,10 @@ def plot_report_base_2d(x, u2d):
             label = r"$|U(x,y)|$"
             title = "(a) Amplitude"
         else:
-            # 只显示振幅不低于峰值 10% 的真实相位
+            # 用振幅峰值处作相位参考，显示整个区域
             amplitude = np.abs(u2d)
-            data = np.ma.masked_where(
-                amplitude < 0.1 * np.max(amplitude),
-                np.angle(u2d * np.exp(-1j * np.angle(u2d.flat[np.argmax(amplitude)])))
-            )
-            cmap = plt.get_cmap("twilight").copy()
-            cmap.set_bad("white")
+            data = np.angle(u2d * np.exp(-1j * np.angle(u2d.flat[np.argmax(amplitude)])))
+            cmap = "twilight"
             low, high = -np.pi, np.pi
             ticks = phase_ticks
             label = "Relative phase (rad)"

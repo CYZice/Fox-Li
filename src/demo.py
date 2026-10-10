@@ -256,9 +256,8 @@ def draw_scan(fig, result):
 def draw_field(fig, ax, x, field, phase=False):
     amplitude = np.abs(field)
     if phase:
-        data = np.ma.masked_where(amplitude < 0.1 * amplitude.max(), np.angle(field))
-        cmap = matplotlib.colormaps["twilight"].copy()
-        cmap.set_bad("white")
+        data = np.angle(field * np.exp(-1j * np.angle(field.flat[np.argmax(amplitude)])))
+        cmap = "twilight"
         low, high = -np.pi, np.pi
     else:
         data, cmap, low, high = amplitude, "magma", 0, 1

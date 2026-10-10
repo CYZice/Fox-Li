@@ -294,7 +294,7 @@ def plot_report_tilt(
 
 
 def plot_bump_fields(x, results, titles, name="bump_mode"):
-    # 与原二维图保持相同的颜色、相位掩膜和坐标范围
+    # 凸起图保留低振幅相位掩膜，颜色和坐标范围保持一致
     fig, axes = plt.subplots(3, len(results), figsize=(10.8, 9),
                              sharex=True, sharey=True, layout="compressed")
     extent = [x[0], x[-1], x[0], x[-1]]
